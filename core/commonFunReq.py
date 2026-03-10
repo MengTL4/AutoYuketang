@@ -2,6 +2,7 @@ import requests
 from datetime import datetime
 import os
 from openai import OpenAI
+import config
 
 class CommonFunReq:
     def __init__(self):
@@ -11,7 +12,7 @@ class CommonFunReq:
             "Accept-Language": "zh-CN,zh;q=0.9,en;q=0.8,ja;q=0.7,zh-TW;q=0.6",
             "Connection": "keep-alive",
             "xtbz": "ykt",
-            "Cookie": "csrftoken=sM5dGcT5w3YAzQZmOaPaoRQyaNUz9EQK; django_language=zh-cn; sessionid=xioto9ba1g2ednahvad5jbk8n652hy1z;",
+            "Cookie": config.Cookie,
         }
         cookie_header = self.headers.get("Cookie", "")
         for cookie_item in cookie_header.split(";"):
@@ -185,7 +186,7 @@ class CommonFunReq:
 
     def dsResult(self,text):
         client = OpenAI(
-            api_key="sk-3f01f69698194359855ae53a28f81330",
+            api_key=config.api_key,
             base_url="https://api.deepseek.com")
         # text = '''
         # <div class="custom_ueditor_cn_body"><ol class=" list-paddingleft-2" style="list-style-type: decimal;"><li><p>结合自己的工作、学习和生活，谈谈如何用“创+”适应“新常态”？</p></li><li><p>从工作、学习和生活等角度看，请指出当下创新创业面临的3-5个痛点、堵点。</p></li><li><p>根据小米生态链模式及AIOT生态圈，请谈一谈小米创新所需的技术因素、市场因素、设计因素、战略因素、组织管理因素等分别体现在哪些地方？<br /></p></li></ol></div>
