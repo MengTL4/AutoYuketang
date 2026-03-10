@@ -1,5 +1,7 @@
 import requests
 import logging
+
+import config
 from core.commonFunReq import CommonFunReq
 from learnPoints.discussLearnPoint import DiscussLearnPoint
 from learnPoints.videoLearnPoint import VideoLearnPoint
@@ -71,10 +73,10 @@ class YKTMain:
             # elif node.get("leaf_type") == 6:
             #     pass
 
-
-        for _ in self.discussLearnPoints:
-            _.initProcess()
-            _.runFinish()
+        if config.api_key:
+            for _ in self.discussLearnPoints:
+                _.initProcess()
+                _.runFinish()
 
         for _ in self.videoLearnPoints:
             _.preInit()
