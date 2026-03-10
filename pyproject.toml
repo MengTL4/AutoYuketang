@@ -1,0 +1,11 @@
+[project]
+name = "autoyuketang"
+version = "0.1.0"
+description = "Add your description here"
+requires-python = ">=3.11"
+dependencies = [
+    "openai>=2.26.0",
+    "pytest>=9.0.2",
+    "requests>=2.32.5",
+    "uuid",
+]
