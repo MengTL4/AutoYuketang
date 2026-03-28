@@ -4,7 +4,8 @@ version = "0.1.0"
 description = "Add your description here"
 requires-python = ">=3.11"
 dependencies = [
-    "openai>=2.26.0",
+    "fonttools>=4.62.1",
+    "pillow>=12.1.1",
     "pytest>=9.0.2",
     "requests>=2.32.5",
     "uuid",

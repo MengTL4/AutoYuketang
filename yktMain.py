@@ -4,6 +4,7 @@ import logging
 import config
 from core.commonFunReq import CommonFunReq
 from learnPoints.discussLearnPoint import DiscussLearnPoint
+from learnPoints.exerciseLearnPoint import ExerciseLearnPoint
 from learnPoints.videoLearnPoint import VideoLearnPoint
 from utils.tools import handleNodes
 logging.basicConfig(
@@ -16,6 +17,7 @@ logger = logging.getLogger(__name__)
 
 class YKTMain:
     def __init__(self):
+        self.exerciseLearnPoints = []
         self.discussLearnPoints = []
         self.university_id = None
         self.videoLearnPoints = []
@@ -70,24 +72,30 @@ class YKTMain:
                 discussLearnPoint = DiscussLearnPoint(node)
                 discussLearnPoint.initContext(self, self.req)
                 self.discussLearnPoints.append(discussLearnPoint)
-            # elif node.get("leaf_type") == 6:
-            #     pass
+            elif node.get("leaf_type") == 6:
+                exerciseLearnPoint = ExerciseLearnPoint(node)
+                exerciseLearnPoint.initContext(self, self.req)
+                self.exerciseLearnPoints.append(exerciseLearnPoint)
 
         if config.api_key:
             for _ in self.discussLearnPoints:
                 _.initProcess()
                 _.runFinish()
+            for _ in self.exerciseLearnPoints:
+                _.initProcess()
+                _.runFinish()
+        else:
+            if self.discussLearnPoints:
+                logger.warning("未配置api_key，跳过讨论学习点")
+            if self.exerciseLearnPoints:
+                logger.warning("未配置api_key，跳过练习学习点")
 
         for _ in self.videoLearnPoints:
             _.preInit()
             _.initProcess()
             _.runFinish()
 
-        # for _ in self.discussLearnPoints:
-        #     _.initProcess()
-        #     _.runFinish()
-
 
 if __name__ == "__main__":
     ykt = YKTMain()
-    ykt.initCourseInfo(1)
+    ykt.initCourseInfo(3)
