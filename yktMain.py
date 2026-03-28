@@ -77,18 +77,18 @@ class YKTMain:
                 exerciseLearnPoint.initContext(self, self.req)
                 self.exerciseLearnPoints.append(exerciseLearnPoint)
 
-        # if config.api_key:
-        #     for _ in self.discussLearnPoints:
-        #         _.initProcess()
-        #         _.runFinish()
-        #     for _ in self.exerciseLearnPoints:
-        #         _.initProcess()
-        #         _.runFinish()
-        # else:
-        #     if self.discussLearnPoints:
-        #         logger.warning("未配置api_key，跳过讨论学习点")
-        #     if self.exerciseLearnPoints:
-        #         logger.warning("未配置api_key，跳过练习学习点")
+        if config.api_key:
+            for _ in self.discussLearnPoints:
+                _.initProcess()
+                _.runFinish()
+            for _ in self.exerciseLearnPoints:
+                _.initProcess()
+                _.runFinish()
+        else:
+            if self.discussLearnPoints:
+                logger.warning("未配置api_key，跳过讨论学习点")
+            if self.exerciseLearnPoints:
+                logger.warning("未配置api_key，跳过练习学习点")
 
         for _ in self.videoLearnPoints:
             _.preInit()
