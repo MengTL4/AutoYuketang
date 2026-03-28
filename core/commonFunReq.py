@@ -445,9 +445,3 @@ class CommonFunReq:
         resp = self.session.post(self.baseUrl + "/mooc-api/v1/lms/exercise/problem_apply/", json=send_data)
         return resp.json()
 
-if __name__ == "__main__":
-    c = CommonFunReq()
-    # print(c.getCourseList())
-    data = c.discussionInfo(28898702,14586682,74729388)
-    print(data)
-
