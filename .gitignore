@@ -1,0 +1,9 @@
+__pycache__/
+.cache/
+.idea/
+.omx/
+.pytest_cache/
+.ruff_cache/
+.serena/
+.spec-workflow/
+.venv/

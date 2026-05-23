@@ -90,12 +90,12 @@ class YKTMain:
             if self.exerciseLearnPoints:
                 logger.warning("未配置api_key，跳过练习学习点")
 
-        for _ in self.videoLearnPoints:
-            _.preInit()
-            _.initProcess()
-            _.runFinish()
+        # for _ in self.videoLearnPoints:
+        #     _.preInit()
+        #     _.initProcess()
+        #     _.runFinish()
 
 
 if __name__ == "__main__":
     ykt = YKTMain()
-    ykt.initCourseInfo(3)
+    ykt.initCourseInfo(2)

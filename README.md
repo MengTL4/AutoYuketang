@@ -8,7 +8,7 @@
 - 自动处理讨论学习点（调用大模型生成评论并提交）
 - 自动处理练习学习点（解码混淆题干/选项，调用大模型答题并提交）
 
-说明：讨论学习点和练习学习点都依赖 `config.py` 里的 `api_key`（`https://api.deepseek.com/chat/completions`，非流式请求，模型 `deepseek-chat`）。
+说明：讨论学习点和练习学习点都依赖 `config.py` 里的 `api_key`（`https://api.deepseek.com/chat/completions`，非流式请求，模型 `deepseek-v4-flash`，显式关闭 thinking 以保持快速响应）。
 
 ## 2. 环境要求
 

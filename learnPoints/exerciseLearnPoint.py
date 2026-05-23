@@ -258,5 +258,3 @@ class ExerciseLearnPoint(BaseLearnPoint):
         if not problem_list:
             return False
         return all(is_problem_completed(problem) for problem in problem_list)
-
-

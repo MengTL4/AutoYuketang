@@ -6,7 +6,7 @@ import config
 
 
 AI_CHAT_COMPLETIONS_URL = "https://api.deepseek.com/chat/completions"
-AI_MODEL = "deepseek-chat"
+AI_MODEL = "deepseek-v4-flash"
 PROBLEM_TYPE_LABELS = {
     "SingleChoice": "单选题",
     "MultipleChoice": "多选题",
@@ -73,6 +73,7 @@ class CommonFunReq:
                         "content": prompt,
                     }
                 ],
+                "thinking": {"type": "disabled"},
                 "stream": False,
             },
             timeout=120,
@@ -444,4 +445,3 @@ class CommonFunReq:
         send_data = {"classroom_id":classroom_id,"problem_id":problem_id,"answer":answer}
         resp = self.session.post(self.baseUrl + "/mooc-api/v1/lms/exercise/problem_apply/", json=send_data)
         return resp.json()
-
