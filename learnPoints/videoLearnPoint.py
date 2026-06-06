@@ -12,6 +12,8 @@ from utils.tools import generate_original_id
 
 logger = logging.getLogger(__name__)
 
+SPEED_MULTIPLIER = 2.0  # 2倍速，对应雨课堂网页播放器的最高倍速
+
 
 class VideoLearnPoint(BaseLearnPoint):
     def __init__(self, nodes):
@@ -238,7 +240,7 @@ class VideoLearnPoint(BaseLearnPoint):
             while current_second < total_seconds:
                 wait_seconds = current_second - last_cp
                 if wait_seconds > 0:
-                    time.sleep(wait_seconds)
+                    time.sleep(wait_seconds / SPEED_MULTIPLIER)
 
                 packet = dict(self.heartBeatBase)
                 packet["cp"] = round(current_second, 1)
@@ -265,7 +267,7 @@ class VideoLearnPoint(BaseLearnPoint):
             if last_cp < total_seconds:
                 wait_seconds = total_seconds - last_cp
                 if wait_seconds > 0:
-                    time.sleep(wait_seconds)
+                    time.sleep(wait_seconds / SPEED_MULTIPLIER)
 
                 end_packet = dict(self.heartBeatBase)
                 end_packet["cp"] = total_seconds
