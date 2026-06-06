@@ -1,4 +1,5 @@
 import logging
+import math
 import re
 import time
 from html import unescape
@@ -18,8 +19,10 @@ PROBLEM_TYPE_LABELS = {
     "MultipleChoice": "多选题",
     "Judgement": "判断题",
 }
-MAX_SUBMIT_ATTEMPTS = 2
-SUBMIT_RETRY_DELAY_SECONDS = 20
+MAX_SUBMIT_ATTEMPTS = 3
+DEFAULT_RETRY_DELAY_SECONDS = 20
+SUBMIT_INTERVAL_SECONDS = 2
+RATE_LIMIT_RE = re.compile(r"Expected available in ([\d.]+)\s*seconds", re.IGNORECASE)
 
 
 def clean_rich_text(value):
@@ -174,20 +177,33 @@ class ExerciseLearnPoint(BaseLearnPoint):
                 return response
 
             last_error = response
+            message = (
+                response.get("detail")
+                or response.get("msg")
+                or response.get("message")
+                or str(response)
+            )
             logger.warning(
                 f"{self._build_problem_log_label(prompt_payload)} "
-                f"第{attempt}次提交失败: "
-                f"{response.get('msg') or response.get('message') or response}"
+                f"第{attempt}次提交失败: {message}"
             )
 
             if attempt < MAX_SUBMIT_ATTEMPTS:
+                wait_seconds = self._extract_rate_limit_seconds(message)
                 logger.warning(
                     f"{self._build_problem_log_label(prompt_payload)} "
-                    f"{SUBMIT_RETRY_DELAY_SECONDS}秒后重试一次"
+                    f"{wait_seconds}秒后重试"
                 )
-                time.sleep(SUBMIT_RETRY_DELAY_SECONDS)
+                time.sleep(wait_seconds)
 
         return last_error
+
+    @staticmethod
+    def _extract_rate_limit_seconds(message):
+        match = RATE_LIMIT_RE.search(str(message))
+        if match:
+            return math.ceil(float(match.group(1)))
+        return DEFAULT_RETRY_DELAY_SECONDS
 
     def _refresh_after_submit(self):
         self._prepare_request_context()
@@ -248,6 +264,7 @@ class ExerciseLearnPoint(BaseLearnPoint):
             logger.info(
                 f"{problem_label} 提交完成，答案: {answer}"
             )
+            time.sleep(SUBMIT_INTERVAL_SECONDS)
 
         if submit_count:
             self._refresh_after_submit()

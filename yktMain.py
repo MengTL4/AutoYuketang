@@ -1,5 +1,7 @@
 import requests
+import ctypes
 import logging
+import sys
 
 import config
 from core.commonFunReq import CommonFunReq
@@ -14,6 +16,25 @@ logging.basicConfig(
 )
 
 logger = logging.getLogger(__name__)
+
+
+def _prevent_system_sleep():
+    """阻止系统自动睡眠（屏幕允许关闭）。"""
+    if sys.platform != "win32":
+        return
+    ES_CONTINUOUS = 0x80000000
+    ES_SYSTEM_REQUIRED = 0x00000001
+    ctypes.windll.kernel32.SetThreadExecutionState(
+        ES_CONTINUOUS | ES_SYSTEM_REQUIRED
+    )
+
+
+def _allow_system_sleep():
+    """恢复系统正常睡眠策略。"""
+    if sys.platform != "win32":
+        return
+    ES_CONTINUOUS = 0x80000000
+    ctypes.windll.kernel32.SetThreadExecutionState(ES_CONTINUOUS)
 
 class YKTMain:
     def __init__(self):
@@ -90,12 +111,18 @@ class YKTMain:
             if self.exerciseLearnPoints:
                 logger.warning("未配置api_key，跳过练习学习点")
 
-        # for _ in self.videoLearnPoints:
-        #     _.preInit()
-        #     _.initProcess()
-        #     _.runFinish()
+        for _ in self.videoLearnPoints:
+            _.preInit()
+            _.initProcess()
+            _.runFinish()
 
 
 if __name__ == "__main__":
-    ykt = YKTMain()
-    ykt.initCourseInfo(2)
+    logger.info("已阻止系统自动睡眠（屏幕可正常关闭），脚本结束后自动恢复")
+    _prevent_system_sleep()
+    try:
+        ykt = YKTMain()
+        ykt.initCourseInfo(2)
+    finally:
+        _allow_system_sleep()
+        logger.info("已恢复系统正常睡眠策略")
