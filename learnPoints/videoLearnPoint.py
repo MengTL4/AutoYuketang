@@ -24,6 +24,7 @@ class VideoLearnPoint(BaseLearnPoint):
         self.ccid = None
         self.sku_id = None
         self.video_length = None
+        self.watch_length = 0.0
         self.heartBeatBase = {
             "i": 5,
             "et": None,
@@ -160,10 +161,12 @@ class VideoLearnPoint(BaseLearnPoint):
         data2 = self.req.getVideoWatchProgress(
             self.course_id, self.user_id, self.classroom_id, self.node_id
         )
-        self.video_length = (
-            data2.get("data").get(f"{self.node_id}", {}).get("video_length")
-        )
-        self.finish = data2.get("data").get(f"{self.node_id}", {}).get("completed")
+        video_data = data2.get("data", {}).get(f"{self.node_id}", {})
+        self.video_length = video_data.get("video_length")
+        self.finish = video_data.get("completed")
+        self.watch_length = float(video_data.get("watch_length") or 0)
+        # 将初始化心跳的cp设为当前进度，避免cp从0跳到已有进度引起服务端怀疑
+        self.heartBeatBase["cp"] = self.watch_length
         self.heartBeatBase["d"] = self.video_length
         self.heartBeatBase["et"] = "loadeddata"
         self.heartBeatBase["sq"] = 2
@@ -202,7 +205,8 @@ class VideoLearnPoint(BaseLearnPoint):
 
             total_seconds = float(self.video_length or 0)
             sq = 7
-            last_cp = 0.0
+            resume_from = float(self.watch_length or 0)
+            last_cp = resume_from
             heart_beat_batch = []
 
             if total_seconds <= 0:
@@ -235,8 +239,12 @@ class VideoLearnPoint(BaseLearnPoint):
                 logger.info(f"{self.node_name}学习点已完成")
                 return
 
-            self._render_progress(0, total_seconds)
-            current_second = 5.0
+            if resume_from > 0:
+                logger.info(
+                    f"{self.node_name}上次已看{resume_from:.0f}秒，从断点继续"
+                )
+            self._render_progress(resume_from, total_seconds)
+            current_second = resume_from + 5.0
             while current_second < total_seconds:
                 wait_seconds = current_second - last_cp
                 if wait_seconds > 0:
