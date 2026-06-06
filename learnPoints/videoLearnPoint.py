@@ -12,7 +12,9 @@ from utils.tools import generate_original_id
 
 logger = logging.getLogger(__name__)
 
-SPEED_MULTIPLIER = 2.0  # 2倍速，对应雨课堂网页播放器的最高倍速
+PLAYBACK_SPEED = 2
+HEARTBEAT_INTERVAL_SECONDS = 5.0
+HEARTBEAT_PROGRESS_SECONDS = HEARTBEAT_INTERVAL_SECONDS * PLAYBACK_SPEED
 
 
 class VideoLearnPoint(BaseLearnPoint):
@@ -25,6 +27,9 @@ class VideoLearnPoint(BaseLearnPoint):
         self.sku_id = None
         self.video_length = None
         self.watch_length = 0.0
+        self.last_point = 0.0
+        self.resume_from = 0.0
+        self.next_heartbeat_sq = 1
         self.heartBeatBase = {
             "i": 5,
             "et": None,
@@ -51,6 +56,55 @@ class VideoLearnPoint(BaseLearnPoint):
             "slide": 0,
             "v_url": "",
         }
+
+    @staticmethod
+    def _safe_float(value, default=0.0):
+        try:
+            return float(value)
+        except (TypeError, ValueError):
+            return default
+
+    @staticmethod
+    def _clamp_progress(value, total_seconds):
+        value = max(float(value), 0.0)
+        if total_seconds > 0:
+            return min(value, float(total_seconds))
+        return value
+
+    def _select_resume_point(self, video_data, total_seconds):
+        if video_data.get("completed") == 1:
+            return 0.0
+
+        if video_data.get("last_point") is not None:
+            resume_from = self._safe_float(video_data.get("last_point"))
+        else:
+            resume_from = max(self._safe_float(video_data.get("watch_length")) - 1, 0.0)
+
+        return self._clamp_progress(resume_from, total_seconds)
+
+    def _set_heartbeat_state(self, event_type, cp, sq, sp=None, duration=None):
+        if sp is None:
+            sp = self.heartBeatBase.get("sp", 1)
+        if duration is None:
+            duration = self.heartBeatBase.get("d")
+
+        self.heartBeatBase["et"] = event_type
+        self.heartBeatBase["cp"] = round(float(cp), 1)
+        self.heartBeatBase["sp"] = sp
+        self.heartBeatBase["d"] = duration
+        self.heartBeatBase["sq"] = sq
+        self.heartBeatBase["ts"] = str(int(time.time() * 1000))
+        return dict(self.heartBeatBase)
+
+    def _send_video_end(self, cp, sq):
+        end_packet = self._set_heartbeat_state(
+            "videoend", cp, sq, sp=PLAYBACK_SPEED, duration=self.video_length
+        )
+        self.req.videoHeartbeat([end_packet], self.classroom_id)
+        self.req.getVideoWatchProgress(
+            self.course_id, self.user_id, self.classroom_id, self.node_id
+        )
+        self.req.train_classes(self.classroom_id)
 
     def _render_progress(self, current_second, total_seconds):
         if not sys.stdout.isatty():
@@ -145,48 +199,72 @@ class VideoLearnPoint(BaseLearnPoint):
         # self.ccid = (
         #     data.get("data", {}).get("content_info", {}).get("media", {}).get("ccid")
         # )
-        self.heartBeatBase["et"] = "loadstart"
-        self.heartBeatBase["ts"] = str(int(datetime.now().timestamp() * 1000))
         self.heartBeatBase["u"] = self.user_id
         self.heartBeatBase["c"] = self.course_id
         self.heartBeatBase["v"] = self.node_id
         self.heartBeatBase["skuid"] = self.sku_id
         self.heartBeatBase["classroomid"] = str(self.classroom_id)
         self.heartBeatBase["cc"] = self.ccid
-        self.heartBeatBase["d"] = 0
         self.heartBeatBase["pg"] = f"{self.node_id}_{uuid.uuid4().hex[:4]}"
-        self.heartBeatBase["sq"] = 1
-        heartBeatBaseList.append(dict(self.heartBeatBase))
+        heartBeatBaseList.append(
+            self._set_heartbeat_state("loadstart", 0, 1, sp=1, duration=0)
+        )
 
         data2 = self.req.getVideoWatchProgress(
             self.course_id, self.user_id, self.classroom_id, self.node_id
         )
         video_data = data2.get("data", {}).get(f"{self.node_id}", {})
-        self.video_length = video_data.get("video_length")
+        self.video_length = self._safe_float(video_data.get("video_length"))
         self.finish = video_data.get("completed")
-        self.watch_length = float(video_data.get("watch_length") or 0)
-        # 将初始化心跳的cp设为当前进度，避免cp从0跳到已有进度引起服务端怀疑
-        self.heartBeatBase["cp"] = self.watch_length
-        self.heartBeatBase["d"] = self.video_length
-        self.heartBeatBase["et"] = "loadeddata"
-        self.heartBeatBase["sq"] = 2
-        heartBeatBaseList.append(dict(self.heartBeatBase))
+        self.watch_length = self._safe_float(video_data.get("watch_length"))
+        self.last_point = self._safe_float(video_data.get("last_point"))
+        total_seconds = self.video_length
+        self.resume_from = self._select_resume_point(video_data, total_seconds)
+        sq = 2
 
-        self.heartBeatBase["et"] = "play"
-        self.heartBeatBase["sq"] = 3
-        heartBeatBaseList.append(dict(self.heartBeatBase))
+        if self.resume_from > 0:
+            heartBeatBaseList.append(
+                self._set_heartbeat_state(
+                    "seeking", self.resume_from, sq, sp=1, duration=self.video_length
+                )
+            )
+            sq += 1
 
-        self.heartBeatBase["et"] = "playing"
-        self.heartBeatBase["sq"] = 4
-        heartBeatBaseList.append(dict(self.heartBeatBase))
+        heartBeatBaseList.append(
+            self._set_heartbeat_state(
+                "loadeddata", self.resume_from, sq, sp=1, duration=self.video_length
+            )
+        )
+        sq += 1
 
-        self.heartBeatBase["et"] = "waiting"
-        self.heartBeatBase["sq"] = 5
-        heartBeatBaseList.append(dict(self.heartBeatBase))
+        heartBeatBaseList.append(
+            self._set_heartbeat_state(
+                "ratechange",
+                self.resume_from,
+                sq,
+                sp=PLAYBACK_SPEED,
+                duration=self.video_length,
+            )
+        )
+        sq += 1
 
-        self.heartBeatBase["et"] = "playing"
-        self.heartBeatBase["sq"] = 6
-        heartBeatBaseList.append(dict(self.heartBeatBase))
+        if self.resume_from > 0:
+            startup_events = ("play", "playing")
+        else:
+            startup_events = ("waiting", "playing")
+        for event_type in startup_events:
+            heartBeatBaseList.append(
+                self._set_heartbeat_state(
+                    event_type,
+                    self.resume_from,
+                    sq,
+                    sp=PLAYBACK_SPEED,
+                    duration=self.video_length,
+                )
+            )
+            sq += 1
+
+        self.next_heartbeat_sq = sq
         self.req.videoHeartbeat(heartBeatBaseList, self.classroom_id)
         self.req.getVideoWatchProgress(
             self.course_id, self.user_id, self.classroom_id, self.node_id
@@ -203,9 +281,9 @@ class VideoLearnPoint(BaseLearnPoint):
         else:
             logger.info(f"开始刷{self.node_name}学习点")
 
-            total_seconds = float(self.video_length or 0)
-            sq = 7
-            resume_from = float(self.watch_length or 0)
+            total_seconds = self._safe_float(self.video_length)
+            sq = self.next_heartbeat_sq
+            resume_from = self._clamp_progress(self.resume_from, total_seconds)
             last_cp = resume_from
             heart_beat_batch = []
 
@@ -213,25 +291,24 @@ class VideoLearnPoint(BaseLearnPoint):
                 latest_progress = self.req.getVideoWatchProgress(
                     self.course_id, self.user_id, self.classroom_id, self.node_id
                 )
-                total_seconds = float(
-                    latest_progress.get("data", {})
-                    .get(f"{self.node_id}", {})
-                    .get("video_length")
-                    or 0
-                )
+                video_data = latest_progress.get("data", {}).get(f"{self.node_id}", {})
+                self.video_length = self._safe_float(video_data.get("video_length"))
+                self.watch_length = self._safe_float(video_data.get("watch_length"))
+                self.last_point = self._safe_float(video_data.get("last_point"))
+                total_seconds = self.video_length
+                self.resume_from = self._select_resume_point(video_data, total_seconds)
+                resume_from = self.resume_from
+                last_cp = resume_from
                 if total_seconds > 0:
-                    self.video_length = total_seconds
                     self.heartBeatBase["d"] = total_seconds
 
             if total_seconds <= 0:
                 logger.warning(
                     f"{self.node_name}学习点时长为0，使用最小心跳上报（不显示进度条）"
                 )
-                end_packet = dict(self.heartBeatBase)
-                end_packet["cp"] = 0
-                end_packet["et"] = "videoend"
-                end_packet["sq"] = sq
-                end_packet["ts"] = str(int(time.time() * 1000))
+                end_packet = self._set_heartbeat_state(
+                    "videoend", 0, sq, sp=PLAYBACK_SPEED, duration=0
+                )
                 self.req.videoHeartbeat([end_packet], self.classroom_id)
                 self.req.getVideoWatchProgress(
                     self.course_id, self.user_id, self.classroom_id, self.node_id
@@ -241,20 +318,29 @@ class VideoLearnPoint(BaseLearnPoint):
 
             if resume_from > 0:
                 logger.info(
-                    f"{self.node_name}上次已看{resume_from:.0f}秒，从断点继续"
+                    f"{self.node_name}上次看到{resume_from:.1f}秒，从断点继续"
                 )
             self._render_progress(resume_from, total_seconds)
-            current_second = resume_from + 5.0
-            while current_second < total_seconds:
-                wait_seconds = current_second - last_cp
-                if wait_seconds > 0:
-                    time.sleep(wait_seconds / SPEED_MULTIPLIER)
 
-                packet = dict(self.heartBeatBase)
-                packet["cp"] = round(current_second, 1)
-                packet["et"] = "heartbeat"
-                packet["sq"] = sq
-                packet["ts"] = str(int(time.time() * 1000))
+            if resume_from >= total_seconds:
+                logger.info(f"{self.node_name}已到视频末尾，补发结束心跳")
+                self._send_video_end(total_seconds, sq)
+                self._render_progress(total_seconds, total_seconds)
+                print()
+                logger.info(f"{self.node_name}学习点已完成")
+                return
+
+            current_second = round(resume_from + HEARTBEAT_PROGRESS_SECONDS, 1)
+            while current_second < total_seconds:
+                time.sleep(HEARTBEAT_INTERVAL_SECONDS)
+
+                packet = self._set_heartbeat_state(
+                    "heartbeat",
+                    current_second,
+                    sq,
+                    sp=PLAYBACK_SPEED,
+                    duration=self.video_length,
+                )
                 heart_beat_batch.append(packet)
                 sq += 1
                 last_cp = packet["cp"]
@@ -270,18 +356,20 @@ class VideoLearnPoint(BaseLearnPoint):
                     )
                     heart_beat_batch = []
 
-                current_second = round(current_second + 5.0, 1)
+                current_second = round(current_second + HEARTBEAT_PROGRESS_SECONDS, 1)
 
             if last_cp < total_seconds:
                 wait_seconds = total_seconds - last_cp
                 if wait_seconds > 0:
-                    time.sleep(wait_seconds / SPEED_MULTIPLIER)
+                    time.sleep(wait_seconds / PLAYBACK_SPEED)
 
-                end_packet = dict(self.heartBeatBase)
-                end_packet["cp"] = total_seconds
-                end_packet["et"] = "videoend"
-                end_packet["sq"] = sq
-                end_packet["ts"] = str(int(time.time() * 1000))
+                end_packet = self._set_heartbeat_state(
+                    "videoend",
+                    total_seconds,
+                    sq,
+                    sp=PLAYBACK_SPEED,
+                    duration=self.video_length,
+                )
                 heart_beat_batch.append(end_packet)
             elif heart_beat_batch:
                 heart_beat_batch[-1]["et"] = "videoend"
