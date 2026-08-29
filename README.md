@@ -7,6 +7,7 @@
 - 自动处理视频学习点（发送心跳、推进视频进度）
 - 自动处理讨论学习点（调用大模型生成评论并提交）
 - 自动处理练习学习点（解码混淆题干/选项，调用大模型答题并提交）
+- 期末考试自动答题（调用大模型作答，不自动交卷，需自行在网页确认交卷）
 
 说明：讨论学习点和练习学习点都依赖 `config.py` 里的 `api_key`（`https://api.deepseek.com/chat/completions`，非流式请求，模型 `deepseek-v4-flash`，显式关闭 thinking 以保持快速响应）。
 
@@ -39,6 +40,7 @@ python -m pip install -U requests pillow fonttools pytest
 ```python
 Cookie = "你的完整Cookie字符串"
 api_key = "你的 DeepSeek API Key"
+X_ACCESS_TOKEN = "浏览器 cookies 中 x_access_token 的值（仅期末考试需要）"
 ```
 
 ### 4.1 Cookie 如何准备

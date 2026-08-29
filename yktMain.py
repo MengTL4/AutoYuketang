@@ -7,6 +7,7 @@ import config
 from core.commonFunReq import CommonFunReq
 from learnPoints.discussLearnPoint import DiscussLearnPoint
 from learnPoints.exerciseLearnPoint import ExerciseLearnPoint
+from learnPoints.examLearnPoint import ExamLearnPoint
 from learnPoints.videoLearnPoint import VideoLearnPoint
 from utils.tools import handleNodes
 logging.basicConfig(
@@ -54,6 +55,39 @@ class YKTMain:
         self.userInfo = None
         self.user_id = None
         self.course_id = None
+        self._leaf_5_nodes = []
+
+    def _handle_exam(self, node):
+        if not config.api_key:
+            logger.warning("未配置 api_key，跳过期末考试自动答题")
+            return
+        if not config.X_ACCESS_TOKEN:
+            logger.warning("未配置 X_ACCESS_TOKEN，跳过期末考试自动答题")
+            return
+
+        node_id = node.get("id")
+        self.req.headers["classroom-id"] = str(self.classroom_id)
+        self.req.session.headers.update(self.req.headers)
+
+        try:
+            leaf_info = self.req.getSkuidAndCcid(self.classroom_id, node_id)
+            exam_id = (
+                leaf_info.get("data", {})
+                .get("content_info", {})
+                .get("leaf_type_id")
+            )
+        except Exception as exc:
+            logger.warning(f"获取期末考试信息失败: {exc}")
+            return
+
+        if not exam_id:
+            logger.warning("未找到期末考试 ID")
+            return
+
+        logger.info(f"发现期末考试，exam_id={exam_id}")
+        exam = ExamLearnPoint(node)
+        exam.init_context(self.classroom_id, self.university_id, exam_id)
+        exam.run(self.req)
 
     def initCourseInfo(self, indexNum):
         self.courseList = self.req.getCourseList().get("data").get("list")[indexNum]
@@ -97,6 +131,13 @@ class YKTMain:
                 exerciseLearnPoint = ExerciseLearnPoint(node)
                 exerciseLearnPoint.initContext(self, self.req)
                 self.exerciseLearnPoints.append(exerciseLearnPoint)
+            elif node.get("leaf_type") == 5:
+                # 期末考试
+                self._leaf_5_nodes.append(node)
+
+        # 处理期末考试（优先）
+        for node in getattr(self, "_leaf_5_nodes", []):
+            self._handle_exam(node)
 
         if config.api_key:
             for _ in self.discussLearnPoints:
